@@ -1,32 +1,25 @@
 package top.maybesix.xhlibrary.serialport;
 
-import android.util.Log;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.security.InvalidParameterException;
-
 import android_serialport_api.SerialPort;
-import top.maybesix.xhlibrary.util.HexStringUtils;
 
 /**
  * @author MaybeSix
  */
 public class SerialPortHelper {
-    private static final String TAG = "SerialPortHelper";
+
     private OnSerialPortReceivedListener onSerialPortReceivedListener;
     private SerialPort serialPort;
     private OutputStream outputStream;
     private InputStream inputStream;
     private ReadThread readThread;
-    private SendThread sendThread;
     private String port;
     private int baudRate;
     private boolean openState = false;
-    private byte[] loopData = new byte[]{0x30};
-    private int delay = 500;
 
 
     public SerialPortHelper(String port, int baudRate, OnSerialPortReceivedListener listener) {
@@ -52,23 +45,10 @@ public class SerialPortHelper {
     /**
      * 串口打开方法
      */
-    public void open() {
-        try {
-            baseOpen();
-            Log.i(TAG, "打开串口成功！");
-        } catch (SecurityException e) {
-            e.printStackTrace();
-            Log.e(TAG, "打开串口失败:没有串口读/写权限!");
-        } catch (IOException e) {
-            e.printStackTrace();
-            Log.e(TAG, "打开串口失败:未知错误!");
-        } catch (InvalidParameterException e) {
-            e.printStackTrace();
-            Log.e(TAG, "打开串口失败:参数错误!");
-        } catch (Exception e) {
-            Log.e(TAG, "openComPort: 其他错误");
-            e.printStackTrace();
-        }
+    public void open() throws Exception{
+
+        baseOpen();
+
     }
 
     private void baseOpen() throws SecurityException, IOException, InvalidParameterException {
@@ -77,9 +57,6 @@ public class SerialPortHelper {
         inputStream = serialPort.getInputStream();
         readThread = new ReadThread();
         readThread.start();
-        sendThread = new SendThread();
-        sendThread.setSuspendFlag();
-        sendThread.start();
         openState = true;
     }
 
@@ -100,39 +77,15 @@ public class SerialPortHelper {
     /**
      * 执行发送程序，若未开启，则会先开启，然后再发送
      *
-     * @param bOutArray
+     * @param bytes
      */
-    private void send(byte[] bOutArray) {
-        try {
-            if (openState) {
-                outputStream.write(bOutArray);
-            } else {
-                open();
-                outputStream.write(bOutArray);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+    public void send(byte[] bytes) throws Exception {
+        if (openState) {
+            outputStream.write(bytes);
+        } else {
+            open();
+            outputStream.write(bytes);
         }
-    }
-
-    /**
-     * 发送十六进制字符串
-     *
-     * @param hexString
-     */
-    public void sendHex(String hexString) {
-        byte[] bOutArray = HexStringUtils.hexString2ByteArray(hexString);
-        send(bOutArray);
-    }
-
-    /**
-     * 发送文本
-     *
-     * @param txtString
-     */
-    public void sendTxtString(String txtString) {
-        byte[] bOutArray = txtString.getBytes();
-        send(bOutArray);
     }
 
     private class ReadThread extends Thread {
@@ -144,62 +97,17 @@ public class SerialPortHelper {
                     if (inputStream == null) {
                         return;
                     }
-                    byte[] buffer = new byte[512];
+                    byte[] buffer = new byte[2048];
                     int size = inputStream.read(buffer);
                     if (size > 0) {
                         ComPortData comPortData = new ComPortData(port, buffer, size);
                         onSerialPortReceivedListener.onSerialPortDataReceived(comPortData);
                     }
-
                 } catch (Throwable e) {
                     e.printStackTrace();
                     return;
                 }
             }
-        }
-    }
-
-    private class SendThread extends Thread {
-        /**
-         * 线程运行标志
-         */
-        boolean runFlag = true;
-
-        @Override
-        public void run() {
-            super.run();
-            while (!isInterrupted()) {
-                synchronized (this) {
-                    while (runFlag) {
-                        try {
-                            wait();
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-                send(getLoopData());
-                try {
-                    Thread.sleep(delay);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        /**
-         * 线程暂停
-         */
-        private void setSuspendFlag() {
-            this.runFlag = true;
-        }
-
-        /**
-         * 唤醒线程
-         */
-        private synchronized void setResume() {
-            this.runFlag = false;
-            notify();
         }
     }
 
@@ -231,70 +139,6 @@ public class SerialPortHelper {
         } else {
             this.port = sPort;
             return true;
-        }
-    }
-
-
-    public byte[] getLoopData() {
-        return loopData;
-    }
-
-    /**
-     * 设置循环发送的数据
-     *
-     * @param loopData byte数据
-     */
-    public void setLoopData(byte[] loopData) {
-        this.loopData = loopData;
-    }
-
-    /**
-     * 设置循环发送的数据
-     *
-     * @param str         传入的字符串
-     * @param isHexString 是否为16进制字符串
-     */
-    public void setLoopData(String str, boolean isHexString) {
-        if (isHexString) {
-            this.loopData = str.getBytes();
-        } else {
-            this.loopData = HexStringUtils.hexString2ByteArray(str);
-        }
-    }
-
-    /**
-     * 获取延迟
-     *
-     * @return 时间（毫秒）
-     */
-    public int getDelay() {
-        return delay;
-    }
-
-    /**
-     * 设置延时（毫秒）
-     *
-     * @param delay
-     */
-    public void setDelay(int delay) {
-        this.delay = delay;
-    }
-
-    /**
-     * 开启循环发送
-     */
-    public void startSend() {
-        if (sendThread != null) {
-            sendThread.setResume();
-        }
-    }
-
-    /**
-     * 停止循环发送
-     */
-    public void stopSend() {
-        if (sendThread != null) {
-            sendThread.setSuspendFlag();
         }
     }
 

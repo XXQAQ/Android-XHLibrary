@@ -5,12 +5,8 @@ import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
-
-import com.blankj.utilcode.util.ServiceUtils;
-
 import top.maybesix.xhlibrary.serialport.ComPortData;
 import top.maybesix.xhlibrary.serialport.SerialPortHelper;
-import top.maybesix.xhlibrary.util.HexStringUtils;
 
 /**
  * @author MaybeSix
@@ -33,7 +29,11 @@ public class MainActivity extends AppCompatActivity implements SerialPortHelper.
         //串口程序初始化
         serialPort = new SerialPortHelper(port, baudRate, this);
         //打开串口
-        serialPort.open();
+        try {
+            serialPort.open();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
 
@@ -47,7 +47,11 @@ public class MainActivity extends AppCompatActivity implements SerialPortHelper.
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                serialPort.sendHex("A55A01000396");
+                try {
+                    serialPort.send("A55A01000396".getBytes());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         });
     }
